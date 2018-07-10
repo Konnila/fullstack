@@ -1,17 +1,23 @@
 import React from 'react';
-import ReactDOM from 'react-dom'
+import ReactDOM from 'react-dom';
+import personService from './services/persons';
 
 class App extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      persons: [
-        { name: 'Arto Hellas', phonenr: '040 112' }
-      ],
+      persons: [],
       newName: '',
       newNumber: '',
       filterWord: ''
     }
+  }
+
+  componentDidMount() {
+    personService.getAll()
+      .then(response => {
+        this.setState({ persons: response.data })
+      });
   }
 
   handleChange = (e, property) => {
@@ -22,14 +28,41 @@ class App extends React.Component {
 
   handleSubmit = (e) => {
       e.preventDefault();
-      if(this.state.persons.map(p => p.name).indexOf(this.state.newName) > -1) {
-        this.setState({newName: '', newNumber: ''});
-        return;
+
+      //if name already exists, ask to replace number
+      if(this.state.persons.map(p => p.name.toLowerCase()).indexOf(this.state.newName.toLowerCase()) > -1) {
+        //wants to replace
+        if(window.confirm("Korvataanko? :)")) {
+          const toReplace = { ...this.state.persons.find(p => p.name == this.state.newName), 
+                              number: this.state.newNumber }
+          personService.replacePerson(toReplace).then(resp => {
+            this.setState({persons: this.state.persons.map(p => p.id === toReplace.id ? resp.data : p),
+                          newName: '', newNumber: ''});
+          });
+          return;
+        }
+        //does not want to replace -> just clear inputs
+        else {
+          this.setState({newName: '', newNumber: ''})
+        }
+      }
+      //name does not exist -> add a new one
+      else {
+        personService.addPerson({name: this.state.newName, number: this.state.newNumber})
+                     .then(resp => this.setState({persons: this.state.persons.concat(resp.data)}));
       }
 
-      const newEntry = { name: this.state.newName, phonenr: this.state.newNumber };
-      this.setState({persons: this.state.persons.concat([newEntry]),
-                     newName: '', newNumber: ''});
+
+  }
+
+  handleDelete = (id) => {
+    if(window.confirm("really?"))
+    {
+      personService.deletePerson(id)
+                    .then(() => {
+                      this.setState({persons: this.state.persons.filter(p => p.id !== id)})
+                    });
+    }
   }
 
   render() {
@@ -50,23 +83,24 @@ class App extends React.Component {
           </div>
         </form>
         <h2>Numerot</h2>
-        {this.state.persons.filter(p => p.name.toLowerCase().includes(this.state.filterWord.toLowerCase())).map(p => <PersonInformation key={p.name} name={p.name} number={p.phonenr} /> )}
+        {this.state.persons.filter(p => p.name.toLowerCase().includes(this.state.filterWord.toLowerCase()))
+                           .map(p => <PersonInformation key={p.name} clickFn={() => this.handleDelete(p.id)} name={p.name} number={p.number} /> )}
       </div>
     )
   }
 }
 
-const PersonInformation = ({ name, number}) => {
+const PersonInformation = ({ name, number, clickFn}) => {
     return (
-        <p> {name} {number}</p>
+        <p> {name} {number} <button onClick={clickFn}>Poista</button></p>
     );
 }
 
 const Filter = ({filterword, changeFn}) => {
     return (   
         <div>
-            <label>Etsi hakusanalla</label>
-        <input type="text" onChange={changeFn} value={filterword} />
+          <label>Etsi hakusanalla</label>
+          <input type="text" onChange={changeFn} value={filterword} />
         </div>);
 
 }
