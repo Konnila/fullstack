@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import personService from './services/persons';
+import './index.css'
 
 class App extends React.Component {
   constructor(props) {
@@ -9,7 +10,8 @@ class App extends React.Component {
       persons: [],
       newName: '',
       newNumber: '',
-      filterWord: ''
+      filterWord: '',
+      infoDialog: { text: '', error: "false"}
     }
   }
 
@@ -33,12 +35,18 @@ class App extends React.Component {
       if(this.state.persons.map(p => p.name.toLowerCase()).indexOf(this.state.newName.toLowerCase()) > -1) {
         //wants to replace
         if(window.confirm("Korvataanko? :)")) {
-          const toReplace = { ...this.state.persons.find(p => p.name == this.state.newName), 
+          const toReplace = { ...this.state.persons.find(p => p.name === this.state.newName), 
                               number: this.state.newNumber }
-          personService.replacePerson(toReplace).then(resp => {
-            this.setState({persons: this.state.persons.map(p => p.id === toReplace.id ? resp.data : p),
-                          newName: '', newNumber: ''});
-          });
+
+          personService.replacePerson(toReplace)
+            .then(resp => {
+                  this.setState({persons: this.state.persons.map(p => p.id === toReplace.id ? resp.data : p),
+                          newName: '', newNumber: '', infoDialog: {text: `Phonenumber of ${toReplace.name} replaced`}});
+                })
+            .catch(err => {this.setState({
+              infoDialog: {text: "Already deleted from server", error: true},
+              persons: this.state.persons.filter(p => p.id !== toReplace.id)
+            })});
           return;
         }
         //does not want to replace -> just clear inputs
@@ -49,7 +57,9 @@ class App extends React.Component {
       //name does not exist -> add a new one
       else {
         personService.addPerson({name: this.state.newName, number: this.state.newNumber})
-                     .then(resp => this.setState({persons: this.state.persons.concat(resp.data)}));
+                     .then(resp => this.setState({
+                       persons: this.state.persons.concat(resp.data),
+                       infoDialog: {text: "Added a new entry", error: false}}));
       }
 
 
@@ -60,14 +70,20 @@ class App extends React.Component {
     {
       personService.deletePerson(id)
                     .then(() => {
-                      this.setState({persons: this.state.persons.filter(p => p.id !== id)})
-                    });
+                      this.setState({persons: this.state.persons.filter(p => p.id !== id),
+                                    infoDialog: {text: "Delete successful", error: false}})
+                    })
+                    .catch(err => this.setState({
+                      infoDialog: {text: "Already deleted from server", error: true},
+                      persons: this.state.persons.filter(p => p.id !== id)
+                    }));
     }
   }
 
   render() {
     return (
       <div>
+        <Notification infoDialog={this.state.infoDialog} timeoutFn={() => this.setState({ infoDialog: {text: '', error: false }})} />
         <h2>Puhelinluettelo</h2>
         <Filter filterword={this.state.filterWord} changeFn={(e) => this.handleChange(e, 'filterWord')} />
         <h3> Lisää uusi </h3>
@@ -103,6 +119,31 @@ const Filter = ({filterword, changeFn}) => {
           <input type="text" onChange={changeFn} value={filterword} />
         </div>);
 
+}
+
+const Notification = ({ infoDialog, timeoutFn }) => {
+  if (infoDialog.text === '') {
+    return null
+  }
+
+  const message = infoDialog.text;
+
+  setTimeout(timeoutFn, 5000);
+
+  if (infoDialog.error) {
+    return (
+      <div className="error">
+        {message}
+      </div>
+    )
+  }
+  else {
+    return (
+      <div className="success">
+      {message}
+      </div>
+    )
+  }
 }
 
 export default App;
